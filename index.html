@@ -6,8 +6,8 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <style>
     body { font-family: system-ui, -apple-system, Roboto, sans-serif; display:flex; align-items:center; justify-content:center; height:100vh; background:#f4f7fb; margin:0; }
-    .calc { background:#fff; padding:12px; border-radius:8px; box-shadow:0 6px 18px rgba(0,0,0,0.08); width:280px; }
-    .display { height:56px; border-radius:6px; background:#222; color:#fff; font-size:28px; text-align:right; padding:10px; box-sizing:border-box; margin-bottom:12px; overflow:hidden; }
+    .calc { background:#fff; padding:12px; border-radius:8px; box-shadow:0 6px 18px rgba(0,0,0,0.08); width:320px; }
+    .display { height:56px; border-radius:6px; background:#222; color:#fff; font-size:28px; text-align:right; padding:10px; box-sizing:border-box; margin-bottom:12px; overflow:hidden; word-break:break-all; }
     .keys { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; }
     button { font-size:18px; padding:14px; border:none; border-radius:6px; cursor:pointer; }
     button.op { background:#f0ad4e; color:#fff; }
@@ -37,66 +37,104 @@
 
   <script>
     const display = document.getElementById('display');
-    let current = '0';
-    let previous = null;
-    let op = null;
-    let resetNext = false;
+
+    // We'll keep three parts: left operand, operator, right operand.
+    // This lets the display always show the full expression like "2+2" while typing.
+    let left = '0';
+    let operator = '';
+    let right = '';
 
     function update() {
-      display.textContent = current;
+      const expr = operator ? (left + operator + right) : left;
+      display.textContent = expr || '0';
     }
 
     function inputNum(n) {
-      if (resetNext) { current = '0'; resetNext = false; }
-      if (n === '.' && current.includes('.')) return;
-      current = (current === '0' && n !== '.') ? n : current + n;
+      if (!operator) {
+        if (n === '.' && left.includes('.')) return;
+        if (left === '0' && n !== '.') left = n;
+        else left = left + n;
+      } else {
+        if (n === '.' && right.includes('.')) return;
+        if (right === '' && n === '.') right = '0.';
+        else right = right + n;
+      }
       update();
     }
 
     function applyOp(nextOp) {
-      if (op && previous !== null && !resetNext) {
-        compute();
-      } else {
-        previous = parseFloat(current);
+      if (operator && right !== '') {
+        // compute first, then set new operator
+        const ok = compute();
+        if (!ok) return; // e.g., division by zero
       }
-      op = nextOp;
-      resetNext = true;
+      operator = nextOp;
+      update();
     }
 
     function compute() {
-      const a = previous;
-      const b = parseFloat(current);
+      if (!operator || right === '') return true; // nothing to compute
+      const a = parseFloat(left);
+      const b = parseFloat(right);
       let result;
-      if (op === '+') result = a + b;
-      else if (op === '-') result = a - b;
-      else if (op === '*') result = a * b;
-      else if (op === '/') result = (b === 0) ? 'Error' : a / b;
-      else return;
+      if (operator === '+') result = a + b;
+      else if (operator === '-') result = a - b;
+      else if (operator === '*') result = a * b;
+      else if (operator === '/') {
+        if (b === 0) {
+          left = 'Error'; operator = ''; right = '';
+          update();
+          return false;
+        }
+        result = a / b;
+      } else return false;
 
-      current = String(result);
-      // strip trailing .0 for integers
-      if (!isNaN(result) && Number(result) === Math.trunc(Number(result))) {
-        current = String(Math.trunc(Number(result)));
+      // normalize result string (remove trailing .0)
+      if (!isNaN(result) && Number.isFinite(result) && Math.trunc(result) === result) {
+        left = String(Math.trunc(result));
+      } else {
+        left = String(result);
       }
-
+      operator = '';
+      right = '';
       update();
-      resetNext = true;
-      op = null;
-      previous = (current === 'Error') ? null : parseFloat(current);
+      return true;
     }
 
     function clearAll() {
-      current = '0'; previous = null; op = null; resetNext = false; update();
+      left = '0'; operator = ''; right = ''; update();
     }
 
     function toggleNeg() {
-      if (current === '0') return;
-      current = String(-parseFloat(current));
+      if (!operator) {
+        if (left === '0') return;
+        left = String(-parseFloat(left));
+      } else {
+        if (right === '') return;
+        right = String(-parseFloat(right));
+      }
       update();
     }
 
     function percent() {
-      current = String(parseFloat(current) / 100);
+      if (!operator) {
+        left = String(parseFloat(left) / 100);
+      } else {
+        if (right === '') return;
+        right = String(parseFloat(right) / 100);
+      }
+      update();
+    }
+
+    function backspace() {
+      if (right !== '') {
+        right = right.slice(0, -1);
+      } else if (operator !== '') {
+        operator = '';
+      } else {
+        left = left.slice(0, -1);
+        if (left === '' || left === '-') left = '0';
+      }
       update();
     }
 
@@ -109,7 +147,7 @@
         } else if (btn.dataset.action === 'clear') {
           clearAll();
         } else if (btn.dataset.action === 'equals') {
-          if (op) compute();
+          compute();
         } else if (btn.dataset.action === 'neg') {
           toggleNeg();
         } else if (btn.dataset.action === 'percent') {
@@ -125,11 +163,9 @@
       } else if (e.key === '+' || e.key === '-' || e.key === '*' || e.key === '/') {
         applyOp(e.key);
       } else if (e.key === 'Enter' || e.key === '=') {
-        if (op) compute();
+        compute();
       } else if (e.key === 'Backspace') {
-        if (current.length > 1) current = current.slice(0, -1);
-        else current = '0';
-        update();
+        backspace();
       } else if (e.key.toLowerCase() === 'c') {
         clearAll();
       }
