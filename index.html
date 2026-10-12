@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Simple Calculator</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    body { font-family: system-ui, -apple-system, Roboto, sans-serif; display:flex; align-items:center; justify-content:center; height:100vh; background:#f4f7fb; margin:0; }
+    .calc { background:#fff; padding:12px; border-radius:8px; box-shadow:0 6px 18px rgba(0,0,0,0.08); width:280px; }
+    .display { height:56px; border-radius:6px; background:#222; color:#fff; font-size:28px; text-align:right; padding:10px; box-sizing:border-box; margin-bottom:12px; overflow:hidden; }
+    .keys { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; }
+    button { font-size:18px; padding:14px; border:none; border-radius:6px; cursor:pointer; }
+    button.op { background:#f0ad4e; color:#fff; }
+    button.num { background:#e9eef6; }
+    button.action { background:#5cb85c; color:#fff; }
+    button.func { background:#6c757d; color:#fff; }
+  </style>
+</head>
+<body>
+  <div class="calc">
+    <div id="display" class="display">0</div>
+    <div class="keys">
+      <button class="func" data-action="clear">C</button>
+      <button class="func" data-action="neg">+/-</button>
+      <button class="func" data-action="percent">%</button>
+      <button class="op" data-op="/">÷</button>
+
+      <button class="num">7</button><button class="num">8</button><button class="num">9</button><button class="op" data-op="*">×</button>
+
+      <button class="num">4</button><button class="num">5</button><button class="num">6</button><button class="op" data-op="-">−</button>
+
+      <button class="num">1</button><button class="num">2</button><button class="num">3</button><button class="op" data-op="+">+</button>
+
+      <button class="num" style="grid-column: span 2;">0</button><button class="num">.</button><button class="action" data-action="equals">=</button>
+    </div>
+  </div>
+
+  <script>
+    const display = document.getElementById('display');
+    let current = '0';
+    let previous = null;
+    let op = null;
+    let resetNext = false;
+
+    function update() {
+      display.textContent = current;
+    }
+
+    function inputNum(n) {
+      if (resetNext) { current = '0'; resetNext = false; }
+      if (n === '.' && current.includes('.')) return;
+      current = (current === '0' && n !== '.') ? n : current + n;
+      update();
+    }
+
+    function applyOp(nextOp) {
+      if (op && previous !== null && !resetNext) {
+        compute();
+      } else {
+        previous = parseFloat(current);
+      }
+      op = nextOp;
+      resetNext = true;
+    }
+
+    function compute() {
+      const a = previous;
+      const b = parseFloat(current);
+      let result;
+      if (op === '+') result = a + b;
+      else if (op === '-') result = a - b;
+      else if (op === '*') result = a * b;
+      else if (op === '/') result = (b === 0) ? 'Error' : a / b;
+      else return;
+
+      current = String(result);
+      // strip trailing .0 for integers
+      if (!isNaN(result) && Number(result) === Math.trunc(Number(result))) {
+        current = String(Math.trunc(Number(result)));
+      }
+
+      update();
+      resetNext = true;
+      op = null;
+      previous = (current === 'Error') ? null : parseFloat(current);
+    }
+
+    function clearAll() {
+      current = '0'; previous = null; op = null; resetNext = false; update();
+    }
+
+    function toggleNeg() {
+      if (current === '0') return;
+      current = String(-parseFloat(current));
+      update();
+    }
+
+    function percent() {
+      current = String(parseFloat(current) / 100);
+      update();
+    }
+
+    document.querySelectorAll('button').forEach(btn => {
+      btn.addEventListener('click', () => {
+        if (btn.classList.contains('num')) {
+          inputNum(btn.textContent.trim());
+        } else if (btn.classList.contains('op')) {
+          applyOp(btn.dataset.op);
+        } else if (btn.dataset.action === 'clear') {
+          clearAll();
+        } else if (btn.dataset.action === 'equals') {
+          if (op) compute();
+        } else if (btn.dataset.action === 'neg') {
+          toggleNeg();
+        } else if (btn.dataset.action === 'percent') {
+          percent();
+        }
+      });
+    });
+
+    // keyboard support
+    document.addEventListener('keydown', (e) => {
+      if ((e.key >= '0' && e.key <= '9') || e.key === '.') {
+        inputNum(e.key);
+      } else if (e.key === '+' || e.key === '-' || e.key === '*' || e.key === '/') {
+        applyOp(e.key);
+      } else if (e.key === 'Enter' || e.key === '=') {
+        if (op) compute();
+      } else if (e.key === 'Backspace') {
+        if (current.length > 1) current = current.slice(0, -1);
+        else current = '0';
+        update();
+      } else if (e.key.toLowerCase() === 'c') {
+        clearAll();
+      }
+    });
+
+    // initialize
+    update();
+  </script>
+</body>
+</html>
